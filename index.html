@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Music Chatbot</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #bb86fc;
+            --user-msg: #3700b3;
+            --ai-msg: #2c2c2c;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #auth-container, #chat-container {
+            background-color: var(--panel-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            width: 90%;
+            max-width: 450px;
+            box-sizing: border-box;
+        }
+        .hidden { display: none !important; }
+        h2 { margin-top: 0; color: var(--accent-color); text-align: center; }
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+            color: #fff;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            background-color: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        #chat-box {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            background-color: #151515;
+        }
+        .message {
+            margin: 8px 0;
+            padding: 10px 14px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        .user { background-color: var(--user-msg); margin-left: auto; text-align: right; }
+        .ai { background-color: var(--ai-msg); margin-right: auto; }
+        .input-group { display: flex; gap: 8px; }
+        .input-group input { margin: 0; }
+        .input-group button { width: auto; white-space: nowrap; margin: 0; }
+        #status-bar { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. パスワード認証画面 -->
+    <div id="auth-container">
+        <h2>🔒 認証システム</h2>
+        <p style="text-align: center; color: #aaa;">パスワードを入力してください</p>
+        <input type="password" id="password-input" placeholder="パスワードを入力してください">
+        <button onclick="checkPassword()">ログイン</button>
+        <p id="auth-error" style="color: #ff5555; text-align: center; font-size: 14px;"></p>
+    </div>
+
+    <!-- 2. チャット・音楽画面 -->
+    <div id="chat-container" class="hidden">
+        <h2>🤖 AI Music Chat</h2>
+        <div id="chat-box"></div>
+        <div class="input-group">
+            <input type="text" id="user-input" placeholder="メッセージか曲名を入力...">
+            <button onclick="sendMessage()">送信</button>
+        </div>
+        <div id="status-bar">記憶機能: 有効 | 外部URL: 不使用</div>
+    </div>
+
+<script>
+    // --- 1. パスワード機能設定 ---
+    const CORRECT_PASSWORD = "@3828321"; // パスワードを変更しました
+
+    function checkPassword() {
+        const input = document.getElementById("password-input").value;
+        const errorEl = document.getElementById("auth-error");
+        if (input === CORRECT_PASSWORD) {
+            document.getElementById("auth-container").classList.add("hidden");
+            document.getElementById("chat-container").classList.remove("hidden");
+            initAI();
+        } else {
+            errorEl.innerText = "パスワードが正しくありません。";
+        }
+    }
+
+    // --- 2. 記憶機能 & AIロジック ---
+    let memory = JSON.parse(localStorage.getItem("ai_chat_memory")) || {
+        userName: "",
+        favoriteGenre: "",
+        chatHistory: []
+    };
+
+    function saveMemory() {
+        localStorage.setItem("ai_chat_memory", JSON.stringify(memory));
+    }
+
+    function initAI() {
+        const chatBox = document.getElementById("chat-box");
+        if (memory.chatHistory.length === 0) {
+            appendMessage("AI", "こんにちは！私は記憶機能を持ったAIアシスタントです。あなたの名前を教えてくれますか？また、聴きたい有名曲のタイトルを入力すれば、内蔵シンセサイザーで演奏を始めますよ！");
+        } else {
+            // 過去の記憶から復元
+            memory.chatHistory.forEach(msg => appendMessage(msg.sender, msg.text));
+            const welcome = memory.userName ? `おかえりなさい、${memory.userName}さん！またお話ししましょう。` : "おかえりなさい！何かお手伝いすることはありますか？";
+            appendMessage("AI", welcome);
+        }
+    }
+
+    function sendMessage() {
+        const inputEl = document.getElementById("user-input");
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        appendMessage("User", text);
+        memory.chatHistory.push({sender: "User", text: text});
+        inputEl.value = "";
+
+        setTimeout(() => {
+            const reply = generateAIResponse(text);
+            appendMessage("AI", reply);
+            memory.chatHistory.push({sender: "AI", text: reply});
+            saveMemory();
+        }, 600);
+    }
+
+    function appendMessage(sender, text) {
+        const chatBox = document.getElementById("chat-box");
+        const msgDiv = document.createElement("div");
+        msgDiv.classList.add("message", sender === "User" ? "user" : "ai");
+        msgDiv.innerText = text;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // --- 3. AIの簡易対話・記憶判定エンジン ---
+    function generateAIResponse(text) {
+        const lowerText = text.toLowerCase();
+
+        // 1. 記憶フェーズ：名前の記憶
+        if (text.includes("私の名前は") || text.includes("と申します") || text.includes("と言います")) {
+            const name = text.replace(/私の名前は|と申します|と言います|です/g, "").trim();
+            memory.userName = name;
+            return `覚えました！あなたのお名前は「${name}」さんですね。これからはそう呼びます！`;
+        }
+        if (text.includes("名前") && (text.includes("何") || text.includes("おぼえて"))) {
+            return memory.userName ? `あなたの名前は「${memory.userName}」さんです。しっかり覚えていますよ！` : "まだお名前を伺っていません。よければ「私の名前は〇〇です」と教えてください。";
+        }
+
+        // 2. 音楽再生フェーズ（ヒット判定）
+        for (let songName in songDatabase) {
+            if (lowerText.includes(songName)) {
+                playSynthMusic(songName);
+                return `名曲「${songDatabase[songName].title}」ですね！外部URLを一切使わず、内蔵音源(Web Audio API)で再生を開始します。 🎵〜`;
+            }
+        }
+
+        if (text.includes("歌") || text.includes("曲") || text.includes("音楽") || text.includes("再生")) {
+            return "有名な曲のタイトルを教えてください！例えば「エルクンバンチェロ」「きらきら星」「第九」「カエルの合唱」「ジングルベル」などをリクエストできます！";
+        }
+
+        // 3. 通常の会話
+        if (text.includes("こんにちは")) return memory.userName ? `こんにちは、${memory.userName}さん！` : "こんにちは！";
+        if (text.includes("ありがとう")) return "どういたしまして！お役に立てて嬉しいです。";
+        if (text.includes("クリア") || text.includes("リセット")) {
+            memory = { userName: "", favoriteGenre: "", chatHistory: [] };
+            saveMemory();
+            document.getElementById("chat-box").innerHTML = "";
+            return "記憶と履歴をすべて消去しました。";
+        }
+
+        return memory.userName ? `${memory.userName}さん、なるほど。それについてもっと詳しく教えていただけますか？（曲名を入れると音楽が流れます）` : "なるほど、興味深いお話ですね。他にはどんなことが知りたいですか？曲名を教えてくれれば演奏もできます！";
+    }
+
+    // --- 4. 絶対URL禁止をクリアする「内蔵シンセサイザー」データ定義 ---
+    const NOTE_FREQ = { 'C4':261.63, 'D4':293.66, 'E4':329.63, 'F4':349.23, 'G4':392.00, 'A4':440.00, 'B4':493.88, 'C5':523.25, 'D5':587.33, 'E5':659.25, 'F5':698.46, 'G5':783.99, 'A5':880.00, 'R':0 };
+
+    const songDatabase = {
+        "きらきら星": {
+            title: "きらきら星 (Twinkle Twinkle Little Star)",
+            notes: [
+                ['C4',0.5], ['C4',0.5], ['G4',0.5], ['G4',0.5], ['A4',0.5], ['A4',0.5], ['G4',1.0],
+                ['F4',0.5], ['F4',0.5], ['E4',0.5], ['E4',0.5], ['D4',0.5], ['D4',0.5], ['C4',1.0]
+            ]
+        },
+        "第九": {
+            title: "ベートーヴェン：交響曲第9番「歓喜の歌」",
+            notes: [
+                ['E4',0.5], ['E4',0.5], ['F4',0.5], ['G4',0.5], ['G4',0.5], ['F4',0.5], ['E4',0.5], ['D4',0.5],
+                ['C4',0.5], ['C4',0.5], ['D4',0.5], ['E4',0.5], ['E4',0.7], ['D4',0.3], ['D4',1.0]
+            ]
+        },
+        "カエルの合唱": {
+            title: "かエルの合唱",
+            notes: [
+                ['C4',0.5], ['D4',0.5], ['E4',0.5], ['F4',0.5], ['E4',0.5], ['D4',0.5], ['C4',1.0],
+                ['E4',0.5], ['F4',0.5], ['G4',0.5], ['A4',0.5], ['G4',0.5], ['F4',0.5], ['E4',1.0]
+            ]
+        },
+        "ジングルベル": {
+            title: "ジングルベル",
+            notes: [
+                ['E4',0.5], ['E4',0.5], ['E4',1.0], ['E4',0.5], ['E4',0.5], ['E4',1.0],
+                ['E4',0.5], ['G4',0.5], ['C4',0.7], ['D4',0.3], ['E4',2.0]
+            ]
+        },
+        "エルクンバンチェロ": {
+            title: "エル・クンバンチェロ (El Cumbanchero)",
+            notes: [
+                ['E4',0.2], ['E4',0.2], ['E4',0.2], ['E4',0.2], ['A4',0.4], ['R',0.2], ['A4',0.4],
+                ['C5',0.2], ['B4',0.2], ['A4',0.2], ['G4',0.2], ['A4',0.8]
+            ]
+        }
+    };
+
+    // --- 5. Web Audio API 演奏処理 ---
+    let audioCtx = null;
+
+    function playSynthMusic(songKey) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        const song = songDatabase[songKey];
+        if (!song) return;
+
+        let currentTime = audioCtx.currentTime + 0.1;
+        const tempoFactor = 0.8;
+
+        song.notes.forEach(noteData => {
+            const note = noteData[0];
+            const duration = noteData[1] * tempoFactor;
+
+            if (note !== 'R') {
+                const osc = audioCtx.createOscillator();
