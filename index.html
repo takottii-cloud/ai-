@@ -82,11 +82,12 @@
 <body>
 
     <!-- 1. パスワード認証画面 -->
-    <div id="auth-container">
+    <!-- translate="no" を追加し、ブラウザによる勝手な翻訳・変換を防御 -->
+    <div id="auth-container" translate="no">
         <h2>🔒 認証システム</h2>
         <p style="text-align: center; color: #aaa;">パスワードを入力してください</p>
-        <input type="password" id="password-input" placeholder="パスワードを入力してください">
-        <button onclick="checkPassword()">ログイン</button>
+        <input type="password" id="password-input" placeholder="Password...">
+        <button type="button" onclick="checkPassword()">ログイン</button>
         <p id="auth-error" style="color: #ff5555; text-align: center; font-size: 14px;"></p>
     </div>
 
@@ -96,18 +97,24 @@
         <div id="chat-box"></div>
         <div class="input-group">
             <input type="text" id="user-input" placeholder="メッセージか曲名を入力...">
-            <button onclick="sendMessage()">送信</button>
+            <button type="button" onclick="sendMessage()">送信</button>
         </div>
         <div id="status-bar">記憶機能: 有効 | 外部URL: 不使用</div>
     </div>
 
 <script>
-    // --- 1. パスワード機能設定 ---
-    const CORRECT_PASSWORD = "@3828321"; // パスワードを変更しました
+    // --- 1. パスワード機能設定 (翻訳対策強化版) ---
+    const CORRECT_PASSWORD = "@3828321"; 
 
     function checkPassword() {
-        const input = document.getElementById("password-input").value;
+        let input = document.getElementById("password-input").value.trim();
         const errorEl = document.getElementById("auth-error");
+
+        // 全角の「＠」や「数字」を半角へ自動変換する防御ロジック
+        input = input.replace(/[！-～]/g, function(s) {
+            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        }).replace(/＠/g, '@');
+
         if (input === CORRECT_PASSWORD) {
             document.getElementById("auth-container").classList.add("hidden");
             document.getElementById("chat-container").classList.remove("hidden");
@@ -133,7 +140,6 @@
         if (memory.chatHistory.length === 0) {
             appendMessage("AI", "こんにちは！私は記憶機能を持ったAIアシスタントです。あなたの名前を教えてくれますか？また、聴きたい有名曲のタイトルを入力すれば、内蔵シンセサイザーで演奏を始めますよ！");
         } else {
-            // 過去の記憶から復元
             memory.chatHistory.forEach(msg => appendMessage(msg.sender, msg.text));
             const welcome = memory.userName ? `おかえりなさい、${memory.userName}さん！またお話ししましょう。` : "おかえりなさい！何かお手伝いすることはありますか？";
             appendMessage("AI", welcome);
@@ -170,7 +176,6 @@
     function generateAIResponse(text) {
         const lowerText = text.toLowerCase();
 
-        // 1. 記憶フェーズ：名前の記憶
         if (text.includes("私の名前は") || text.includes("と申します") || text.includes("と言います")) {
             const name = text.replace(/私の名前は|と申します|と言います|です/g, "").trim();
             memory.userName = name;
@@ -180,7 +185,6 @@
             return memory.userName ? `あなたの名前は「${memory.userName}」さんです。しっかり覚えていますよ！` : "まだお名前を伺っていません。よければ「私の名前は〇〇です」と教えてください。";
         }
 
-        // 2. 音楽再生フェーズ（ヒット判定）
         for (let songName in songDatabase) {
             if (lowerText.includes(songName)) {
                 playSynthMusic(songName);
@@ -192,7 +196,6 @@
             return "有名な曲のタイトルを教えてください！例えば「エルクンバンチェロ」「きらきら星」「第九」「カエルの合唱」「ジングルベル」などをリクエストできます！";
         }
 
-        // 3. 通常の会話
         if (text.includes("こんにちは")) return memory.userName ? `こんにちは、${memory.userName}さん！` : "こんにちは！";
         if (text.includes("ありがとう")) return "どういたしまして！お役に立てて嬉しいです。";
         if (text.includes("クリア") || text.includes("リセット")) {
@@ -205,7 +208,7 @@
         return memory.userName ? `${memory.userName}さん、なるほど。それについてもっと詳しく教えていただけますか？（曲名を入れると音楽が流れます）` : "なるほど、興味深いお話ですね。他にはどんなことが知りたいですか？曲名を教えてくれれば演奏もできます！";
     }
 
-    // --- 4. 絶対URL禁止をクリアする「内蔵シンセサイザー」データ定義 ---
+    // --- 4. 内蔵シンセサイザー データ定義 ---
     const NOTE_FREQ = { 'C4':261.63, 'D4':293.66, 'E4':329.63, 'F4':349.23, 'G4':392.00, 'A4':440.00, 'B4':493.88, 'C5':523.25, 'D5':587.33, 'E5':659.25, 'F5':698.46, 'G5':783.99, 'A5':880.00, 'R':0 };
 
     const songDatabase = {
@@ -262,7 +265,4 @@
 
         song.notes.forEach(noteData => {
             const note = noteData[0];
-            const duration = noteData[1] * tempoFactor;
 
-            if (note !== 'R') {
-                const osc = audioCtx.createOscillator();
